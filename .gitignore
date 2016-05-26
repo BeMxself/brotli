@@ -6,3 +6,9 @@
 tools/bro
 build/
 dist/
+/WinBrotli/Debug
+/WinBrotli/NetBrotli/bin/Debug
+/WinBrotli/NetBrotli/obj/Debug
+/WinBrotli/WinBrotli/Debug
+*.sdf
+*.opendb
