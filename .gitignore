@@ -12,3 +12,13 @@ dist/
 /WinBrotli/WinBrotli/Debug
 *.sdf
 *.opendb
+*.suo
+/WinBrotli/bin/Debug
+/WinBrotli/Brotli/bin
+/WinBrotli/Brotli/obj
+/WinBrotli/NetBrotli/bin/Release
+/WinBrotli/NetBrotli/obj/Release
+/WinBrotli/Release
+/WinBrotli/WinBrotli/Release
+/WinBrotli/WinBrotli/x64
+/WinBrotli/x64
