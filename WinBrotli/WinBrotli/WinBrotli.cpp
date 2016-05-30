@@ -11,6 +11,42 @@ See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
 #include "../../dec/decode.h"
 #include "../../enc/encode.h"
 
+typedef HRESULT (WINAPI *PBROTLIREAD)(void *p, size_t n, size_t *nread);
+typedef bool (WINAPI *PBROTLIWRITE)(const void *p, size_t n);
+
+// adapter classes 
+class BrotliThunkIn : public brotli::BrotliIn
+{
+	PBROTLIREAD _pread;
+
+public:
+	BrotliThunkIn(PBROTLIREAD pread)
+	{
+		_pread = pread;
+	}
+
+	const void* Read(size_t n, size_t* bytes_read)
+	{
+		return 0;
+	}
+};
+
+class BrotliThunkOut : public brotli::BrotliOut
+{
+	PBROTLIWRITE _pwrite;
+
+public:
+	BrotliThunkOut(PBROTLIWRITE pwrite)
+	{
+		_pwrite = pwrite;
+	}
+
+	bool Write(const void* buf, size_t n)
+	{
+		return _pwrite(buf, n);
+	}
+};
+
 void CDECL TraceFormat(PCWSTR pszFormat, ...)
 {
 	WCHAR szTrace[0x2000];
@@ -43,7 +79,7 @@ STDAPI DestroyState(LPVOID pState)
 	return 0;
 }
 
-// note: we have added offset_in & offset_out so it's better suited for .NET p/invoke bindings (avoid unsafe casts)
+// note: we have added offset_in & offset_out so it's better suited for .NET p/invoke bindings (avoid unsafe casts and buffer copies)
 STDAPI_(BrotliResult) DecompressStream(
 	size_t* available_in, uint8_t* next_in, size_t* offset_in,
 	size_t* available_out, uint8_t* next_out, size_t* offset_out,
@@ -59,4 +95,12 @@ STDAPI_(BrotliResult) DecompressStream(
 	*offset_in = (pin - next_in) / sizeof(uint8_t);
 	*offset_out = (pout - next_out) / sizeof(uint8_t);
 	return result;
+}
+
+STDAPI CompressStream(brotli::BrotliParams *bp, PBROTLIREAD read, PBROTLIWRITE write)
+{
+	if (!bp || !read || !write)
+		return E_INVALIDARG;
+
+	return 0;
 }
