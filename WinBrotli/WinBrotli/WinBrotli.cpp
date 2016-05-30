@@ -12,7 +12,7 @@ See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
 #include "../../dec/decode.h"
 #include "../../enc/encode.h"
 
-void CDECL qualityrmat(PCWSTR pszFormat, ...)
+void CDECL TraceFormat(PCWSTR pszFormat, ...)
 {
 	WCHAR szTrace[0x2000];
 	va_list args;
