@@ -6,48 +6,13 @@ See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 #define NOMINMAX
 #include "windows.h"
+#include "objidl.h"						// for ISequentialStream
 #include "strsafe.h"
 
 #include "../../dec/decode.h"
 #include "../../enc/encode.h"
 
-typedef HRESULT (WINAPI *PBROTLIREAD)(void *p, size_t n, size_t *nread);
-typedef bool (WINAPI *PBROTLIWRITE)(const void *p, size_t n);
-
-// adapter classes 
-class BrotliThunkIn : public brotli::BrotliIn
-{
-	PBROTLIREAD _pread;
-
-public:
-	BrotliThunkIn(PBROTLIREAD pread)
-	{
-		_pread = pread;
-	}
-
-	const void* Read(size_t n, size_t* bytes_read)
-	{
-		return 0;
-	}
-};
-
-class BrotliThunkOut : public brotli::BrotliOut
-{
-	PBROTLIWRITE _pwrite;
-
-public:
-	BrotliThunkOut(PBROTLIWRITE pwrite)
-	{
-		_pwrite = pwrite;
-	}
-
-	bool Write(const void* buf, size_t n)
-	{
-		return _pwrite(buf, n);
-	}
-};
-
-void CDECL TraceFormat(PCWSTR pszFormat, ...)
+void CDECL qualityrmat(PCWSTR pszFormat, ...)
 {
 	WCHAR szTrace[0x2000];
 	va_list args;
@@ -56,6 +21,70 @@ void CDECL TraceFormat(PCWSTR pszFormat, ...)
 	va_end(args);
 	OutputDebugString(szTrace);
 }
+
+// adapter classes 
+class BrotliStreamIn : public brotli::BrotliIn
+{
+	ISequentialStream *_pStream;
+	char *_pBuffer;
+	int _bufferSize;
+
+public:
+	BrotliStreamIn(ISequentialStream *pStream, int bufferSize)
+	{
+		_pStream = pStream;
+		_bufferSize = bufferSize;
+		_pBuffer = new char[bufferSize];
+	}
+
+	BrotliStreamIn::~BrotliStreamIn(void)
+	{
+		if (_pBuffer) delete[] _pBuffer;
+	}
+
+	const void* Read(size_t n, size_t* bytes_read)
+	{
+		if (!_pBuffer)
+		{
+			return NULL;
+		}
+
+		if (n > _bufferSize)
+		{
+			n = _bufferSize;
+		}
+
+		ULONG read;
+		_pStream->Read(_pBuffer, (ULONG)n, &read);
+		*bytes_read = read;
+
+		// brotli semantics are a bit strange, read the doc.
+		if (!read && n)
+		{
+			delete[] _pBuffer;
+			_pBuffer = NULL;
+			return NULL;
+		}
+
+		return _pBuffer;
+	}
+};
+
+class BrotliStreamOut : public brotli::BrotliOut
+{
+	ISequentialStream *_pStream;
+
+public:
+	BrotliStreamOut(ISequentialStream *pStream)
+	{
+		_pStream = pStream;
+	}
+
+	bool Write(const void* buf, size_t n)
+	{
+		return !_pStream->Write(buf, (ULONG)n, NULL);
+	}
+};
 
 STDAPI CreateState(LPVOID *ppState)
 {
@@ -67,7 +96,7 @@ STDAPI CreateState(LPVOID *ppState)
 		return E_OUTOFMEMORY;
 
 	*ppState = pState;
-	return 0;
+	return S_OK;
 }
 
 STDAPI DestroyState(LPVOID pState)
@@ -76,7 +105,7 @@ STDAPI DestroyState(LPVOID pState)
 		return E_INVALIDARG;
 
 	BrotliDestroyState((BrotliState*)pState);
-	return 0;
+	return S_OK;
 }
 
 // note: we have added offset_in & offset_out so it's better suited for .NET p/invoke bindings (avoid unsafe casts and buffer copies)
@@ -85,8 +114,6 @@ STDAPI_(BrotliResult) DecompressStream(
 	size_t* available_out, uint8_t* next_out, size_t* offset_out,
 	size_t* total_out, BrotliState* pState)
 {
-	TraceFormat(L"DecompressStream: available_in:%p (%u)",
-		available_in, (*available_in));
 	const uint8_t* pin = next_in;
 	uint8_t* pout = next_out;
 	*offset_in = 0;
@@ -97,10 +124,12 @@ STDAPI_(BrotliResult) DecompressStream(
 	return result;
 }
 
-STDAPI CompressStream(brotli::BrotliParams *bp, PBROTLIREAD read, PBROTLIWRITE write)
+STDAPI_(int) CompressStream(brotli::BrotliParams *bp, ISequentialStream *read, ISequentialStream *write)
 {
 	if (!bp || !read || !write)
 		return E_INVALIDARG;
 
-	return 0;
+	BrotliStreamIn in(read, 1 << 16);
+	BrotliStreamOut out(write);
+	return brotli::BrotliCompress(*bp, &in, &out);
 }
