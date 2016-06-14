@@ -37,7 +37,7 @@ namespace Brotli
 
         public static void Compress(Stream input, Stream output)
         {
-            Compress(CreateDefaultParameters(), input, input);
+            Compress(CreateDefaultParameters(), input, output);
         }
 
         public static void Compress(CompressionParameters parameters, Stream input, Stream output)
